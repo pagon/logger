@@ -11,22 +11,25 @@ use Closure;
  * @method error(string $text)
  * @method critical(string $text)
  */
-class Logger extends Fiber
+class Logger extends LoggerInterface
 {
+    /**
+     * @var array Options
+     */
     protected $options = array(
         'file'       => 'app.log',
-        'auto_write' => true,
-        'format'     => '[$time] $token - $level - $text'
+        'auto_write' => false,
+        'format'     => false,
+        'level'      => 'debug'
     );
 
-    const DEBUG = 0;
-    const INFO = 1;
-    const WARNING = 2;
-    const ERROR = 3;
-    const CRITICAL = 4;
+    protected static $levels = array('debug' => 0, 'info' => 1, 'warning' => 2, 'error' => 3, 'critical' => 4);
 
-    protected static $levels = array('debug', 'info', 'warning', 'error', 'critical');
-    protected static $messages = array();
+    /**
+     * @var string The log message
+     */
+    protected $format = '[$time] $token - $level - $text';
+    protected $streams = array();
 
     /**
      * @param array $options
@@ -36,49 +39,139 @@ class Logger extends Fiber
     {
         $this->options = $options + $this->options;
 
+        // Auto add current file logger to streams
+        if ($this->options['level']) {
+            $this->add($this->options['level'], $this);
+        }
+
+        // Set default format
+        if ($this->options['format']) {
+            $this->format = $this->options['format'];
+        }
+
+        // The time injector
         $this->time = function () {
             return date('Y-m-d H:i:s');
         };
+
+        // Injector the token with share instance
         $this->token = $this->share(function () {
             return substr(sha1(uniqid()), 0, 6);
         });
+
+        // The level
         $this->level = $this->protect(function ($level) {
             return str_pad($level, 8, ' ', STR_PAD_BOTH);
         });
+
+        $that = $this;
+        register_shutdown_function(function () use ($that) {
+            $that->emit('flush');
+        });
+    }
+
+    /**
+     * Add stream
+     *
+     * @param string                         $level
+     * @param string|Closure|LoggerInterface $stream
+     * @param array                          $options
+     * @throws \InvalidArgumentException
+     */
+    public function add($level, $stream, array $options = array())
+    {
+        if (!isset(self::$levels[$level])) {
+            throw new \InvalidArgumentException('Given level "' . $level . '" is not acceptable');
+        }
+
+        if (!isset($this->streams[$level])) {
+            $this->streams[$level] = array();
+        }
+
+        if ($stream instanceof LoggerInterface) {
+            $this->on('flush', function () use ($stream) {
+                $stream->write();
+            });
+        }
+
+        $this->streams[$level][] = is_string($stream) ? array($stream, $options) : $stream;
     }
 
     /**
      * Log
      *
-     * @param string $text
-     * @param int    $level
+     * @param string     $text
+     * @param int|string $level
+     * @throws \InvalidArgumentException
      */
-    public function log($text, $level = self::INFO)
+    public function log($text, $level = 'info')
     {
-        $message = array('text' => $text, 'level' => self::$levels[$level]);
+        if (!isset(self::$levels[$level])) {
+            throw new \InvalidArgumentException('Given level "' . $level . '" is not acceptable');
+        }
 
-        if (preg_match_all('/\$(\w+)/', $this->options['format'], $matches)) {
+        // Default text and level
+        $context = array('text' => $text, 'level' => $level);
+
+        // The format matches to convert to context
+        if (preg_match_all('/\$(\w+)/', $this->format, $matches)) {
             $matches = $matches[1];
             foreach ($matches as $match) {
                 if (!isset($this->$match)) continue;
 
                 if ($this->$match instanceof Closure) {
-                    $message[$match] = call_user_func($this->$match, $message[$match]);
+                    $context[$match] = call_user_func($this->$match, $context[$match]);
                 } else {
-                    $message[$match] = $this->$match;
+                    $context[$match] = $this->$match;
                 }
             }
         }
 
-        foreach ($message as $k => $v) {
-            unset($message[$k]);
-            $message['$' . $k] = $v;
+        /**
+         * Prepare the variable to replace
+         */
+        foreach ($context as $k => $v) {
+            unset($context[$k]);
+            $context['$' . $k] = $v;
         }
 
-        self::$messages[] = strtr($this->options['format'], $message);
+        // Build message
+        $message = strtr($this->format, $context);
 
-        if ($this->options['auto_write']) {
-            $this->write();
+        // Emit the level event
+        $this->emit($level, $message);
+
+        /**
+         * Loop the streams to send message
+         */
+        foreach ($this->streams as $stream_level => &$streams) {
+            if (self::$levels[$stream_level] > self::$levels[$level]) {
+                continue;
+            }
+
+            foreach ($streams as &$stream) {
+                if (is_array($stream)) {
+                    $trys = array(__NAMESPACE__ . '\\Logger\\' . $stream[0], $stream[0]);
+
+                    foreach ($trys as $try) {
+                        if (!class_exists($try)) {
+                            continue;
+                        }
+
+                        $stream = new $try($stream[1]);
+                        $this->on('flush', function () use ($stream) {
+                            $stream->write();
+                        });
+                    }
+                } elseif ($stream instanceof \Closure) {
+                    $stream($message);
+                    continue;
+                }
+
+                if ($stream instanceof LoggerInterface) {
+                    $stream->send($message);
+                }
+            }
         }
     }
 
@@ -98,7 +191,7 @@ class Logger extends Fiber
      */
     public function __call($method, $arguments)
     {
-        if (in_array($method, self::$levels)) {
+        if (isset(self::$levels[$method])) {
             if (!isset($arguments[1])) {
                 $text = $arguments[0];
             } else if (is_array($arguments[1])) {
@@ -108,7 +201,7 @@ class Logger extends Fiber
             } else {
                 $text = $arguments[0];
             }
-            $this->log($text, array_search($method, self::$levels));
+            $this->log($text, $method);
         }
     }
 
@@ -117,9 +210,10 @@ class Logger extends Fiber
      */
     public function write()
     {
-        foreach (self::$messages as $index => $message) {
-            unset(self::$messages[$index]);
+        foreach ($this->messages as $message) {
             file_put_contents($this->options['file'], $message . PHP_EOL, FILE_APPEND);
         }
+
+        $this->clear();
     }
 }
