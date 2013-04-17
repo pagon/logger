@@ -39,7 +39,7 @@ class Logger extends LoggerInterface
      */
     public function __construct(array $options = array())
     {
-        $this->options = $options + $this->options;
+        parent::__construct($options);
 
         // Auto add current file logger to streams
         if ($this->options['level']) {
