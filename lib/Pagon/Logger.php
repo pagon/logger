@@ -19,16 +19,18 @@ class Logger extends LoggerInterface
     protected $options = array(
         'file'       => 'app.log',
         'auto_write' => false,
-        'format'     => false,
-        'level'      => 'debug'
+        'level'      => 'debug',
+        'format'     => '[$time] $token - $level - $text'
     );
 
+    /**
+     * @var array Levels
+     */
     protected static $levels = array('debug' => 0, 'info' => 1, 'warning' => 2, 'error' => 3, 'critical' => 4);
 
     /**
-     * @var string The log message
+     * @var array The log messages
      */
-    protected $format = '[$time] $token - $level - $text';
     protected $streams = array();
 
     /**
@@ -42,11 +44,6 @@ class Logger extends LoggerInterface
         // Auto add current file logger to streams
         if ($this->options['level']) {
             $this->add($this->options['level'], $this);
-        }
-
-        // Set default format
-        if ($this->options['format']) {
-            $this->format = $this->options['format'];
         }
 
         // The time injector
@@ -91,6 +88,7 @@ class Logger extends LoggerInterface
         if ($stream instanceof LoggerInterface) {
             $this->on('flush', function () use ($stream) {
                 $stream->write();
+                $stream->clean();
             });
         }
 
@@ -114,32 +112,14 @@ class Logger extends LoggerInterface
         $context = array('text' => $text, 'level' => $level);
 
         // The format matches to convert to context
-        if (preg_match_all('/\$(\w+)/', $this->format, $matches)) {
-            $matches = $matches[1];
-            foreach ($matches as $match) {
-                if (!isset($this->$match)) continue;
-
-                if ($this->$match instanceof Closure) {
-                    $context[$match] = call_user_func($this->$match, $context[$match]);
-                } else {
-                    $context[$match] = $this->$match;
-                }
+        foreach ($this->injectors as $key => $injector) {
+            $value = $this->$key;
+            if ($value instanceof Closure) {
+                $context[$key] = call_user_func($value, $context[$key]);
+            } else {
+                $context[$key] = $value;
             }
         }
-
-        /**
-         * Prepare the variable to replace
-         */
-        foreach ($context as $k => $v) {
-            unset($context[$k]);
-            $context['$' . $k] = $v;
-        }
-
-        // Build message
-        $message = strtr($this->format, $context);
-
-        // Emit the level event
-        $this->emit($level, $message);
 
         /**
          * Loop the streams to send message
@@ -161,15 +141,16 @@ class Logger extends LoggerInterface
                         $stream = new $try($stream[1]);
                         $this->on('flush', function () use ($stream) {
                             $stream->write();
+                            $stream->clean();
                         });
                     }
                 } elseif ($stream instanceof \Closure) {
-                    $stream($message);
+                    $stream($this->build($context), $context);
                     continue;
                 }
 
                 if ($stream instanceof LoggerInterface) {
-                    $stream->send($message);
+                    $stream->store($context);
                 }
             }
         }
@@ -210,10 +191,6 @@ class Logger extends LoggerInterface
      */
     public function write()
     {
-        foreach ($this->messages as $message) {
-            file_put_contents($this->options['file'], $message . PHP_EOL, FILE_APPEND);
-        }
-
-        $this->clear();
+        file_put_contents($this->options['file'], join(PHP_EOL, $this->buildAll()) . PHP_EOL, FILE_APPEND);
     }
 }

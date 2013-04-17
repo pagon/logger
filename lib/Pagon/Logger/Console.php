@@ -12,8 +12,6 @@ class Console extends \Pagon\LoggerInterface
     {
         if (empty($this->messages)) return;
 
-        print join("\n", $this->messages) . "\n";
-
-        $this->clear();
+        print join("\n", $this->buildAll()) . "\n";
     }
 }
