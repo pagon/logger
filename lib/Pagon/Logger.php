@@ -20,7 +20,6 @@ class Logger extends LoggerInterface
         'file'       => 'app.log',
         'auto_write' => false,
         'level'      => 'debug',
-        'format'     => '[$time] $token - $level - $text'
     );
 
     /**
