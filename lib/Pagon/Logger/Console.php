@@ -2,7 +2,9 @@
 
 namespace Pagon\Logger;
 
-class Console extends \Pagon\LoggerInterface
+use Pagon\LoggerInterface;
+
+class Console extends LoggerInterface
 {
     protected $options = array(
         'auto_write' => true

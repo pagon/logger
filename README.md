@@ -15,12 +15,14 @@
 
 ## 使用
 
-### 基础
+### 基本
 	
 ```php
 $logger = new \Pagon\Logger();
 $logger->debug('User->%s is logged with params: %s', $username, $params);
+// 2013-05-02 13:11:00 - s3f9da -   debug  - User->hfcorriez is logged with params: return=/status
 $logger->info('User->:username login to homepage', array(':username' => $username))
+// 2013-05-02 13:11:00 - s3f9da -   info   - User->hfcorriez login to homepage
 ```
 
 ### 配置
