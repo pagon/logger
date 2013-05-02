@@ -1,17 +1,93 @@
-Pagon Logger [![Build Status](https://travis-ci.org/pagon/logger.png)](https://travis-ci.org/pagon/logger)
-============
+## Pagon Logger [![Build Status](https://travis-ci.org/pagon/logger.png)](https://travis-ci.org/pagon/logger)
 
 非常简单的日志库，支持debug, info, warn, error, critical等日志等级，也支持以stream的方式添加handler
 
-依赖
-============
+[pagon/fiber]: https://github.com/pagon/fiber
+
+## 依赖
 
 - PHP 5.3.9+
 - Composer
 
 库依赖：
 
-`pagon/fiber`
+[pagon/fiber]
+
+## 使用
+
+### 基础
+	
+```php
+$logger = new \Pagon\Logger();
+$logger->debug('User->%s is logged with params: %s', $username, $params);
+$logger->info('User->:username login to homepage', array(':username' => $username))
+```
+
+### 配置
+
+```php
+$logger = new \Pagon\Logger(array(
+    'level' => 'info',
+    'file'  => '/tmp/app.log'
+));
+```
+
+### 格式
+
+使用[pagon/fiber]实现
+
+```php
+$logger = new \Pagon\Logger(array(
+	'format' => '$time - $level - $text'
+));
+```
+
+自定义格式参数
+
+```php
+$logger = new \Pagon\Logger(array(
+	'format' => '$time - $level - $file - $text'
+));
+$logger->file = __FILE__;
+$logger->info('Some info');	// 2013-05-02 13:11:00 - info - /home/hfcorriez/myfile.php - Some info
+```
+
+### Handler
+
+目前只提供一个Console Handler用于在console输出Log信息
+
+```php
+$logger = new \Pagon\Logger();
+$logger->add('debug', new \Pagon\Logger\Console());
+```
+
+自定义Handler
+
+```php
+class YourCustomHanlder extends \Pagon\LoggerInterface
+{
+    public function write()
+    {
+        if (empty($this->messages)) return;
+
+        $message = join("\n", $this->buildAll()) . "\n";
+        
+        mail('your@exapmle.com', 'Some error logs', $message);
+    }
+}
+
+$logger = new \Pagon\Logger();
+$logger->add('error', new YourCustomHanlder());
+```
+
+### 事件
+
+```php
+$logger = new \Pagon\Logger();
+$logger->on('flush', function() {
+    // Some thing before the flush
+});
+```
 
 ## License
 
