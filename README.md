@@ -1,7 +1,5 @@
-Pagon Logger
+Pagon Logger [![Build Status](https://travis-ci.org/pagon/logger.png)](https://travis-ci.org/pagon/logger)
 ============
-
-[![Build Status](https://travis-ci.org/pagon/logger.png)](https://travis-ci.org/pagon/logger)
 
 非常简单的日志库，支持debug, info, warn, error, critical等日志等级，也支持以stream的方式添加handler
 
