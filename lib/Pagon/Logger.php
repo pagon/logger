@@ -20,6 +20,7 @@ class Logger extends LoggerInterface
         'file'       => 'app.log',
         'auto_write' => false,
         'level'      => 'debug',
+        'default'    => true,
     );
 
     /**
@@ -36,12 +37,18 @@ class Logger extends LoggerInterface
      * @param array $options
      * @return self
      */
-    public function __construct(array $options = array())
+    public function __construct($options = array())
     {
+        // Default handler
+        if (is_bool($options)) {
+            $options = array('default' => $options);
+        }
+
+        // Construct by parent
         parent::__construct($options);
 
         // Auto add current file logger to streams
-        if ($this->options['level']) {
+        if ($this->options['level'] && $this->options['default']) {
             $this->add($this->options['level'], $this);
         }
 
