@@ -127,6 +127,9 @@ class Logger extends LoggerInterface
             }
         }
 
+        // Emit the log event
+        $this->emit('log', $context);
+
         /**
          * Loop the streams to send message
          */
