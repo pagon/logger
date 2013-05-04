@@ -7,7 +7,7 @@ use Closure;
 /**
  * @method debug(string $text)
  * @method info(string $text)
- * @method warning(string $text)
+ * @method warn(string $text)
  * @method error(string $text)
  * @method critical(string $text)
  */
@@ -25,7 +25,7 @@ class Logger extends LoggerInterface
     /**
      * @var array Levels
      */
-    protected static $levels = array('debug' => 0, 'info' => 1, 'warning' => 2, 'error' => 3, 'critical' => 4);
+    protected static $levels = array('debug' => 0, 'info' => 1, 'warn' => 2, 'error' => 3, 'critical' => 4);
 
     /**
      * @var array The log messages
@@ -47,7 +47,7 @@ class Logger extends LoggerInterface
 
         // The time injector
         $this->time = function () {
-            return date('Y-m-d H:i:s');
+            return date('Y-m-d H:i:s') . ',' . substr(microtime(true), 11, 3);
         };
 
         // Injector the token with share instance
@@ -57,7 +57,7 @@ class Logger extends LoggerInterface
 
         // The level
         $this->level = $this->protect(function ($level) {
-            return str_pad($level, 8, ' ', STR_PAD_BOTH);
+            return str_pad(strtoupper(substr($level, 0, 6)), 6, ' ', STR_PAD_RIGHT);
         });
 
         $that = $this;
