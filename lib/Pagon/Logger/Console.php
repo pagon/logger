@@ -2,8 +2,6 @@
 
 namespace Pagon\Logger;
 
-use Pagon\LoggerInterface;
-
 class Console extends LoggerInterface
 {
     protected $options = array(
