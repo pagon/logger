@@ -11,7 +11,7 @@ use Closure;
  * @method error(string $text)
  * @method critical(string $text)
  */
-class Logger extends LoggerInterface
+class Logger extends Logger\LoggerInterface
 {
     /**
      * @var array Options
@@ -77,7 +77,7 @@ class Logger extends LoggerInterface
      * Add stream
      *
      * @param string                         $level
-     * @param string|Closure|LoggerInterface $stream
+     * @param string|Closure|Logger\LoggerInterface $stream
      * @param array                          $options
      * @throws \InvalidArgumentException
      */
@@ -91,7 +91,7 @@ class Logger extends LoggerInterface
             $this->streams[$level] = array();
         }
 
-        if ($stream instanceof LoggerInterface) {
+        if ($stream instanceof Logger\LoggerInterface) {
             $this->on('flush', function () use ($stream) {
                 $stream->write();
                 $stream->clean();
@@ -158,7 +158,7 @@ class Logger extends LoggerInterface
                     continue;
                 }
 
-                if ($stream instanceof LoggerInterface) {
+                if ($stream instanceof Logger\LoggerInterface) {
                     $stream->store($context);
                 }
             }

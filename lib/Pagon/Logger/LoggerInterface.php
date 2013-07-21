@@ -1,6 +1,8 @@
 <?php
 
-namespace Pagon;
+namespace Pagon\Logger;
+
+use Pagon\Fiber;
 
 abstract class LoggerInterface extends Fiber
 {
