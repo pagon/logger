@@ -21,17 +21,13 @@ class Logger extends Logger\LoggerInterface
         'auto_write' => false,
         'level'      => 'debug',
         'default'    => true,
+        'streams '   => array()
     );
 
     /**
      * @var array Levels
      */
     protected static $levels = array('debug' => 0, 'info' => 1, 'warn' => 2, 'error' => 3, 'critical' => 4);
-
-    /**
-     * @var array The log messages
-     */
-    protected $streams = array();
 
     /**
      * @param array $options
@@ -54,7 +50,7 @@ class Logger extends Logger\LoggerInterface
 
         // The time injector
         $this->time = function () {
-            return date('Y-m-d H:i:s') . ',' . substr(microtime(true), 11, 3);
+            return date('Y-m-d H:i:s') . ',' . substr(microtime(true) * 1000, 10, 3);
         };
 
         // Injector the token with share instance
@@ -76,9 +72,9 @@ class Logger extends Logger\LoggerInterface
     /**
      * Add stream
      *
-     * @param string                         $level
+     * @param string                                $level
      * @param string|Closure|Logger\LoggerInterface $stream
-     * @param array                          $options
+     * @param array                                 $options
      * @throws \InvalidArgumentException
      */
     public function add($level, $stream, array $options = array())
@@ -87,8 +83,8 @@ class Logger extends Logger\LoggerInterface
             throw new \InvalidArgumentException('Given level "' . $level . '" is not acceptable');
         }
 
-        if (!isset($this->streams[$level])) {
-            $this->streams[$level] = array();
+        if (!isset($this->options['streams'][$level])) {
+            $this->options['streams'][$level] = array();
         }
 
         if ($stream instanceof Logger\LoggerInterface) {
@@ -98,7 +94,7 @@ class Logger extends Logger\LoggerInterface
             });
         }
 
-        $this->streams[$level][] = is_string($stream) ? array($stream, $options) : $stream;
+        $this->options['streams'][$level][] = is_string($stream) ? array($stream, $options) : $stream;
     }
 
     /**
@@ -133,16 +129,16 @@ class Logger extends Logger\LoggerInterface
         /**
          * Loop the streams to send message
          */
-        foreach ($this->streams as $stream_level => &$streams) {
+        foreach ($this->options['streams'] as $stream_level => &$streams) {
             if (self::$levels[$stream_level] > self::$levels[$level]) {
                 continue;
             }
 
             foreach ($streams as &$stream) {
                 if (is_array($stream)) {
-                    $trys = array(__NAMESPACE__ . '\\Logger\\' . $stream[0], $stream[0]);
+                    $tries = array(__NAMESPACE__ . '\\Logger\\' . $stream[0], $stream[0]);
 
-                    foreach ($trys as $try) {
+                    foreach ($tries as $try) {
                         if (!class_exists($try)) {
                             continue;
                         }
@@ -200,6 +196,8 @@ class Logger extends Logger\LoggerInterface
      */
     public function write()
     {
-        file_put_contents($this->options['file'], join(PHP_EOL, $this->buildAll()) . PHP_EOL, FILE_APPEND);
+        if ($messages = $this->buildAll()) {
+            file_put_contents($this->options['file'], join(PHP_EOL, $messages) . PHP_EOL, FILE_APPEND);
+        }
     }
 }
