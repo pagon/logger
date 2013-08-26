@@ -16,12 +16,13 @@ class Logger extends Logger\LoggerInterface
     /**
      * @var array Options
      */
-    protected $options = array(
+    protected $injectors = array(
         'file'           => 'app.log',
         'auto_write'     => false,
         'default_level'  => 'debug',
         'default_stream' => true,
-        'streams '       => array()
+        'streams'        => array(),
+        'contexts'       => array()
     );
 
     /**
@@ -64,43 +65,57 @@ class Logger extends Logger\LoggerInterface
     }
 
     /**
-     * @param array $options
+     * @param array $injectors
      * @return self
      */
-    public function __construct($options = array())
+    public function __construct($injectors = array())
     {
         // Default handler
-        if (is_bool($options)) {
-            $options = array('default_stream' => $options);
+        if (is_bool($injectors)) {
+            $injectors = array('default_stream' => $injectors);
         }
 
         // Construct by parent
-        parent::__construct($options);
+        parent::__construct($injectors);
 
         // Auto add current file logger to streams
-        if ($this->options['default_level'] && $this->options['default_stream']) {
-            $this->add($this->options['default_level'], $this);
+        if ($this->injectors['default_level'] && $this->injectors['default_stream']) {
+            $this->add($this->injectors['default_level'], $this);
         }
 
         // The time injector
-        $this->time = function () {
+        $this->context('time', function () {
             return date('Y-m-d H:i:s') . ',' . substr(microtime(true) * 1000, 10, 3);
-        };
+        });
 
         // Injector the token with share instance
-        $this->token = $this->share(function () {
+        $this->context('token', $this->share(function () {
             return substr(sha1(uniqid()), 0, 6);
-        });
+        }));
 
         // The level
-        $this->level = $this->protect(function ($level) {
+        $this->context('level', $this->protect(function ($level) {
             return str_pad(strtoupper(substr($level, 0, 6)), 6, ' ', STR_PAD_RIGHT);
-        });
+        }));
 
         $that = $this;
         register_shutdown_function(function () use ($that) {
             $that->emit('flush');
         });
+    }
+
+    /**
+     * Set context
+     *
+     * @param string          $key
+     * @param \Closure|String $closure
+     */
+    public function context($key, $closure)
+    {
+        $this->$key = $closure;
+        if (!in_array($key, $this->injectors['contexts'])) {
+            $this->injectors['contexts'][] = $key;
+        }
     }
 
     /**
@@ -117,8 +132,8 @@ class Logger extends Logger\LoggerInterface
             throw new \InvalidArgumentException('Given level "' . $level . '" is not acceptable');
         }
 
-        if (!isset($this->options['streams'][$level])) {
-            $this->options['streams'][$level] = array();
+        if (!isset($this->injectors['streams'][$level])) {
+            $this->injectors['streams'][$level] = array();
         }
 
         if ($stream instanceof Logger\LoggerInterface) {
@@ -127,7 +142,7 @@ class Logger extends Logger\LoggerInterface
             });
         }
 
-        $this->options['streams'][$level][] = is_string($stream) ? array($stream, $options) : $stream;
+        $this->injectors['streams'][$level][] = is_string($stream) ? array($stream, $options) : $stream;
     }
 
     /**
@@ -144,10 +159,10 @@ class Logger extends Logger\LoggerInterface
         }
 
         // Default text and level
-        $context = array('text' => $text, 'level' => $level);
+        $context = array('text' => $text, 'level' => $level, 'level_num' => self::$levels[$level]);
 
         // The format matches to convert to context
-        foreach ($this->options as $key => $injector) {
+        foreach ($this->injectors['contexts'] as $key) {
             $value = $this->$key;
             if ($value instanceof Closure) {
                 $context[$key] = call_user_func($value, $context[$key]);
@@ -162,7 +177,7 @@ class Logger extends Logger\LoggerInterface
         /**
          * Loop the streams to send message
          */
-        foreach ($this->options['streams'] as $stream_level => &$streams) {
+        foreach ($this->injectors['streams'] as $stream_level => &$streams) {
             if (self::$levels[$stream_level] > self::$levels[$level]) {
                 continue;
             }
@@ -181,6 +196,7 @@ class Logger extends Logger\LoggerInterface
                         $this->on('flush', function () use ($stream) {
                             $stream->tryToWrite();
                         });
+                        break;
                     }
                 } elseif ($stream instanceof \Closure) {
                     $stream($this->format($context), $context);
@@ -229,6 +245,6 @@ class Logger extends Logger\LoggerInterface
      */
     public function write()
     {
-        file_put_contents($this->options['file'], join(PHP_EOL, $this->formattedMessages()) . PHP_EOL, FILE_APPEND);
+        file_put_contents($this->injectors['file'], join(PHP_EOL, $this->formattedMessages()) . PHP_EOL, FILE_APPEND);
     }
 }
