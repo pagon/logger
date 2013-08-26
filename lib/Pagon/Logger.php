@@ -17,17 +17,51 @@ class Logger extends Logger\LoggerInterface
      * @var array Options
      */
     protected $options = array(
-        'file'       => 'app.log',
-        'auto_write' => false,
-        'level'      => 'debug',
-        'default'    => true,
-        'streams '   => array()
+        'file'           => 'app.log',
+        'auto_write'     => false,
+        'default_level'  => 'debug',
+        'default_stream' => true,
+        'streams '       => array()
     );
+
+    /**
+     * @var Logger default
+     */
+    public static $default;
 
     /**
      * @var array Levels
      */
     protected static $levels = array('debug' => 0, 'info' => 1, 'warn' => 2, 'error' => 3, 'critical' => 4);
+
+    /**
+     * @var array Instances has dispensed
+     */
+    protected static $instances = array();
+
+    /**
+     *
+     * Call static
+     *
+     * @param string $method
+     * @param array  $arguments
+     * @return mixed
+     * @throws \RuntimeException
+     * @throws \BadMethodCallException
+     */
+    public static function __callStatic($method, $arguments)
+    {
+        if (!isset(self::$levels[$method])) {
+            throw new \BadMethodCallException('Call to undefined method ' . __CLASS__ . '::' . $method);
+        }
+
+        if (self::$default) {
+            // Create default logger with file "app.log" under your working directory
+            self::$default = new self(array('file' => getcwd() . '/app.log'));
+        }
+
+        return call_user_func_array(array(self::$default, $method), $arguments);
+    }
 
     /**
      * @param array $options
@@ -37,15 +71,15 @@ class Logger extends Logger\LoggerInterface
     {
         // Default handler
         if (is_bool($options)) {
-            $options = array('default' => $options);
+            $options = array('default_stream' => $options);
         }
 
         // Construct by parent
         parent::__construct($options);
 
         // Auto add current file logger to streams
-        if ($this->options['level'] && $this->options['default']) {
-            $this->add($this->options['level'], $this);
+        if ($this->options['default_level'] && $this->options['default_stream']) {
+            $this->add($this->options['default_level'], $this);
         }
 
         // The time injector
@@ -89,8 +123,7 @@ class Logger extends Logger\LoggerInterface
 
         if ($stream instanceof Logger\LoggerInterface) {
             $this->on('flush', function () use ($stream) {
-                $stream->write();
-                $stream->clean();
+                $stream->tryToWrite();
             });
         }
 
@@ -114,7 +147,7 @@ class Logger extends Logger\LoggerInterface
         $context = array('text' => $text, 'level' => $level);
 
         // The format matches to convert to context
-        foreach ($this->injectors as $key => $injector) {
+        foreach ($this->options as $key => $injector) {
             $value = $this->$key;
             if ($value instanceof Closure) {
                 $context[$key] = call_user_func($value, $context[$key]);
@@ -143,14 +176,14 @@ class Logger extends Logger\LoggerInterface
                             continue;
                         }
 
+                        /** @var $stream Logger\LoggerInterface */
                         $stream = new $try($stream[1]);
                         $this->on('flush', function () use ($stream) {
-                            $stream->write();
-                            $stream->clean();
+                            $stream->tryToWrite();
                         });
                     }
                 } elseif ($stream instanceof \Closure) {
-                    $stream($this->build($context), $context);
+                    $stream($this->format($context), $context);
                     continue;
                 }
 
@@ -196,8 +229,6 @@ class Logger extends Logger\LoggerInterface
      */
     public function write()
     {
-        if ($messages = $this->buildAll()) {
-            file_put_contents($this->options['file'], join(PHP_EOL, $messages) . PHP_EOL, FILE_APPEND);
-        }
+        file_put_contents($this->options['file'], join(PHP_EOL, $this->formattedMessages()) . PHP_EOL, FILE_APPEND);
     }
 }

@@ -10,7 +10,7 @@ abstract class LoggerInterface extends Fiber
      * @var array Options of logger
      */
     protected $options = array(
-        'auto_write' => false,
+        'auto_write' => false
     );
 
     /**
@@ -64,7 +64,7 @@ abstract class LoggerInterface extends Fiber
      * @param array $context
      * @return string
      */
-    public function build(array $context)
+    public function format(array $context)
     {
         /**
          * Prepare the variable to replace
@@ -83,12 +83,23 @@ abstract class LoggerInterface extends Fiber
      *
      * @return array
      */
-    public function buildAll()
+    public function formattedMessages()
     {
         $that = $this;
         return array_map(function ($message) use ($that) {
-            return $that->build($message);
+            return $that->format($message);
         }, $this->messages);
+    }
+
+    /**
+     * Try to write
+     */
+    public function tryToWrite()
+    {
+        if (empty($this->messages)) return;
+
+        $this->write();
+        $this->clean();
     }
 
     /**
