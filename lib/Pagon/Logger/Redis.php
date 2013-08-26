@@ -27,12 +27,12 @@ class Redis extends LoggerInterface
 
         if (!$this->injectors['client']) {
             $this->injectors['client'] = new \Redis();
+            $this->injectors['client']->connect($this->injectors['host'], $this->injectors['port']);
+            $this->injectors['client']->select($this->injectors['db']);
         }
 
         // Save client
         $this->client = $this->injectors['client'];
-        $this->client->connect($this->injectors['host'], $this->injectors['port']);
-        $this->client->select($this->injectors['db']);
     }
 
     /**
